@@ -5,6 +5,11 @@ import logging
 from tqdm import tqdm
 from datetime import datetime
 
+# Import paths from config.py
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import DATA_DIR, GAMES_DIR, TEAMS_DIR, PITCHERS_DIR, PROCESSED_DIR, ANALYSIS_DIR
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -16,12 +21,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Define directory paths
-DATA_DIR = "sports_data/mlb"
-TEAMS_DIR = os.path.join(DATA_DIR, "teams")
-GAMES_DIR = os.path.join(DATA_DIR, "games")
-PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
-ANALYSIS_DIR = os.path.join(DATA_DIR, "analysis")
+# Comment out original directory paths since we're using config.py now
+# DATA_DIR = "sports_data/mlb"
+# TEAMS_DIR = os.path.join(DATA_DIR, "teams")
+# GAMES_DIR = os.path.join(DATA_DIR, "games")
+# PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
+# ANALYSIS_DIR = os.path.join(DATA_DIR, "analysis")
 
 # Fixed version of add_team_trends function
 def add_team_trends(df, team_id_col, team_score_col, opp_score_col, win_indicator, prefix):
