@@ -1,8 +1,10 @@
+# utilities/create_player_mapping.py
 import os
-import json
 import pandas as pd
+import json
 from tqdm import tqdm
 import sys
+import statsapi
 
 # Import paths from config.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,13 +21,12 @@ def create_improved_player_mapping():
     # Dictionary to store player mappings
     player_map = {}
     
-    # First, try to extract from pitcher files
+    # Step 1: Extract from pitcher files
     print("Extracting names from pitcher files...")
     player_files = [f for f in os.listdir(PITCHERS_DIR) if f.endswith(".json")]
     
     for file in tqdm(player_files, desc="Processing pitcher files"):
         try:
-            # Extract player ID from filename
             parts = file.split("_")
             if len(parts) >= 2:
                 player_id = parts[1]
@@ -33,11 +34,9 @@ def create_improved_player_mapping():
                 continue
                 
             file_path = os.path.join(PITCHERS_DIR, file)
-            
             with open(file_path, 'r') as f:
                 data = json.load(f)
             
-            # Method 1: Look for people[0].fullName
             if 'info' in data and isinstance(data['info'], dict) and 'people' in data['info']:
                 people = data['info']['people']
                 if isinstance(people, list) and len(people) > 0:
@@ -51,12 +50,11 @@ def create_improved_player_mapping():
         except Exception as e:
             print(f"Error processing {file}: {e}")
     
-    # Second, try to extract from player game stats
+    # Step 2: Extract from player game stats
     print("Extracting names from game stats...")
     stats_file_2023 = os.path.join(DATA_DIR, "analysis", "player_game_stats_2023.csv")
     stats_file_2024 = os.path.join(DATA_DIR, "analysis", "player_game_stats_2024.csv")
     
-    # Look for player name columns in game stats
     if os.path.exists(stats_file_2023):
         try:
             stats_df = pd.read_csv(stats_file_2023)
@@ -75,42 +73,69 @@ def create_improved_player_mapping():
         except Exception as e:
             print(f"Error extracting from 2024 stats: {e}")
     
-    # Third, try to get names from game data
+    # Step 3: Extract from game data
     print("Searching for names in game data...")
     games_dir = os.path.join(DATA_DIR, "games")
-    
-    # Get a sample of game directories
     game_dirs = [d for d in os.listdir(games_dir) if os.path.isdir(os.path.join(games_dir, d))]
-    sample_dirs = game_dirs[:50]  # Use a sample to avoid processing too many
     
-    for game_dir in tqdm(sample_dirs, desc="Checking game data"):
+    for game_dir in tqdm(game_dirs, desc="Checking game data"):
         try:
-            # Check game data file for player names
             game_data_file = os.path.join(games_dir, game_dir, "game_data.json")
-            
             if os.path.exists(game_data_file):
                 with open(game_data_file, 'r') as f:
                     game_data = json.load(f)
-                
-                # Extract player names from game data
                 if 'gameData' in game_data and 'players' in game_data['gameData']:
                     players = game_data['gameData']['players']
-                    
                     for player_key, player_info in players.items():
                         if player_key.startswith('ID'):
                             player_id = player_key.replace('ID', '')
-                            
                             if 'fullName' in player_info:
                                 player_map[player_id] = player_info['fullName']
-                            elif 'firstName' in player_info and 'lastName' in player_info:
+                            elif 'firstName' in person and 'lastName' in person:
                                 player_map[player_id] = f"{player_info['firstName']} {player_info['lastName']}"
         except Exception as e:
             print(f"Error checking game data in {game_dir}: {e}")
     
-    # Fourth, try to use a manual mapping for top players
-    print("Adding manual mappings for top players...")
+    # Step 4: Extract player IDs from game_outcomes lineups and fetch names
+    print("Extracting player IDs from game_outcomes lineups...")
+    game_files = [
+        os.path.join(DATA_DIR, "contextual", "game_outcomes_2023.csv"),
+        os.path.join(DATA_DIR, "contextual", "game_outcomes_2024.csv")
+    ]
     
-    # Add manual mappings for some common player IDs we see in the predictions
+    all_player_ids = set()
+    for game_file in game_files:
+        if not os.path.exists(game_file):
+            continue
+        games_df = pd.read_csv(game_file)
+        for team in ['home', 'away']:
+            lineup_col = f'{team}_starting_lineup'
+            if lineup_col not in games_df.columns:
+                continue
+            for lineup in games_df[lineup_col].dropna():
+                player_ids = str(lineup).split(',')
+                for player_id in player_ids:
+                    player_id = str(player_id).strip()
+                    if player_id:
+                        all_player_ids.add(player_id)
+    
+    print(f"Found {len(all_player_ids)} unique player IDs in lineups. Fetching names...")
+    for player_id in tqdm(all_player_ids, desc="Fetching player names"):
+        if player_id in player_map:
+            continue
+        try:
+            person_data = statsapi.get('person', {'personId': player_id})
+            if 'people' in person_data and len(person_data['people']) > 0:
+                person = person_data['people'][0]
+                if 'fullName' in person:
+                    player_map[player_id] = person['fullName']
+                elif 'firstName' in person and 'lastName' in person:
+                    player_map[player_id] = f"{person['firstName']} {person['lastName']}"
+        except Exception as e:
+            print(f"Error fetching name for player ID {player_id}: {e}")
+    
+    # Step 5: Add manual mappings for top players
+    print("Adding manual mappings for top players...")
     top_players = {
         '691176': 'Shohei Ohtani',
         '518626': 'Carlos Correa',
@@ -131,16 +156,21 @@ def create_improved_player_mapping():
         '687093': 'Brent Rooker',
         '518692': 'Freddie Freeman',
         '641355': 'Dansby Swanson',
-        '643217': 'Christian Walker'
+        '643217': 'Christian Walker',
+        '605119': 'Shohei Ohtani',  # From unmatched list
+        '666801': 'Mike Trout',
+        '665120': 'Mookie Betts',
+        '607043': 'Bryce Harper',
+        '571745': 'Freddy Peralta'
     }
     
     for player_id, name in top_players.items():
         player_map[player_id] = name
     
-    # Save the comprehensive mapping to a file
+    # Save the mapping
     mapping_file = os.path.join(PREDICTION_DIR, "improved_player_id_map.csv")
     mapping_df = pd.DataFrame({"player_id": list(player_map.keys()), 
-                 "player_name": list(player_map.values())})
+                               "player_name": list(player_map.values())})
     mapping_df.to_csv(mapping_file, index=False)
     
     print(f"Saved {len(player_map)} player ID mappings to {mapping_file}")
