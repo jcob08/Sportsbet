@@ -1,0 +1,20 @@
+2025-05-03 13:23:25,292 - INFO - ==== Processing data for 2024 season ====
+2025-05-03 13:23:25,292 - INFO - Processing data for model training for 2024
+2025-05-03 13:23:25,348 - INFO - Found 2430 completed regular season games for 2024
+2025-05-03 13:23:37,346 - INFO - Saved processed features to C:\MLB-Betting\sports_data\mlb\processed\game_features_2024.csv
+2025-05-03 13:23:37,347 - INFO - Successfully processed features for 2024
+2025-05-03 13:23:37,347 - INFO - Extracting player stats from boxscores for 2024
+2025-05-03 13:26:00,052 - INFO - Found 2430 games from 2024
+2025-05-03 13:26:00,052 - INFO - Processed 2430 games with boxscore data
+2025-05-03 13:26:00,290 - INFO - Saved 50746 player-game records to C:\MLB-Betting\sports_data\mlb\analysis\player_game_stats_2024.csv
+2025-05-03 13:26:00,302 - INFO - Successfully extracted player stats for 2024
+2025-05-03 13:26:00,302 - INFO - ==== Completed processing for 2024 season ====
+2025-05-03 13:26:00,302 - INFO - ==== Processing data for 2025 season ====
+2025-05-03 13:26:00,302 - INFO - Processing data for model training for 2025
+2025-05-03 13:26:00,303 - ERROR - Teams file not found: C:\MLB-Betting\sports_data\mlb\teams\teams_2025.csv
+2025-05-03 13:26:00,304 - INFO - Extracting player stats from boxscores for 2025
+2025-05-03 13:27:35,464 - INFO - Found 0 games from 2025
+2025-05-03 13:27:35,464 - INFO - Processed 0 games with boxscore data
+2025-05-03 13:27:35,465 - INFO - No player game stats found for 2025
+2025-05-03 13:27:35,468 - INFO - ==== Completed processing for 2025 season ====
+2025-05-03 13:27:35,468 - INFO - All data processing complete!

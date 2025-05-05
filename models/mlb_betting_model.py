@@ -168,6 +168,38 @@ class MLBBettingModel:
         data['over'] = (data['total_runs'] > data['total_line']).astype(int)
         
         return data
+
+    def _preprocess_data(self, X):
+        """
+        Preprocess data to handle missing values
+        
+        Args:
+            X (DataFrame): Features to preprocess
+            
+        Returns:
+            DataFrame: Processed features with missing values filled
+        """
+        # Make a copy to avoid modifying the original
+        X_processed = X.copy()
+        
+        # For each column, fill NaN values with appropriate values
+        for col in X_processed.columns:
+            # If the column has NaN values
+            if X_processed[col].isna().any():
+                # Fill NaNs with the column median for numeric features
+                if pd.api.types.is_numeric_dtype(X_processed[col]):
+                    # Get median excluding NaNs
+                    median_val = X_processed[col].median()
+                    # Fill NaNs with median
+                    X_processed[col] = X_processed[col].fillna(median_val)
+                    print(f"Warning: {col} contains NaN values. Filling with median value: {median_val:.4f}")
+                else:
+                    # For categorical features, fill with the most frequent value
+                    mode_val = X_processed[col].mode()[0]
+                    X_processed[col] = X_processed[col].fillna(mode_val)
+                    print(f"Warning: {col} contains NaN values. Filling with mode value: {mode_val}")
+        
+        return X_processed
     
     def prepare_features(self, data, target_type='totals', include_contextual=True):
         """
@@ -272,6 +304,9 @@ class MLBBettingModel:
         # Prepare features
         X, y, features, target_name = self.prepare_features(
             data, target_type, include_contextual)
+            
+        # Preprocess the features to handle missing values
+        X_processed = self._preprocess_data(X)
         
         # Choose model type
         if model_type == 'rf':
@@ -293,11 +328,11 @@ class MLBBettingModel:
         ])
         
         # Perform cross-validation
-        cv_scores = cross_val_score(pipeline, X, y, cv=5, scoring='neg_mean_squared_error')
+        cv_scores = cross_val_score(pipeline, X_processed, y, cv=5, scoring='neg_mean_squared_error')
         rmse_scores = np.sqrt(-cv_scores)
         
         # Train on full dataset
-        pipeline.fit(X, y)
+        pipeline.fit(X_processed, y)
         
         # Save model info
         model_id = f"{target_type}_{'context' if include_contextual else 'basic'}_{model_type}"
@@ -357,9 +392,12 @@ class MLBBettingModel:
         X = data_encoded[features]
         y = data_encoded[target]
         
+        # Preprocess features
+        X_processed = self._preprocess_data(X)
+        
         # Split into train and test
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42)
+            X_processed, y, test_size=test_size, random_state=42)
         
         # Train on training set
         pipeline.fit(X_train, y_train)
@@ -619,8 +657,11 @@ class MLBBettingModel:
         # Prepare data
         X = games_encoded[features]
         
+        # Preprocess features
+        X_processed = self._preprocess_data(X)
+        
         # Make predictions
-        predictions = pipeline.predict(X)
+        predictions = pipeline.predict(X_processed)
         
         # Add predictions to the data
         new_games[f'predicted_{target}'] = predictions
@@ -682,3 +723,319 @@ class MLBBettingModel:
             return 100 / (odds + 100)
         else:
             return abs(odds) / (abs(odds) + 100)
+            
+    def load_player_data(self):
+        """
+        Load player data for props predictions
+        
+        Returns:
+            tuple: (player_projections, batter_statcast, pitcher_statcast)
+        """
+        import os
+        import pandas as pd
+        print("Loading player data for props predictions...")
+        
+        # Load player projections
+        projection_file = os.path.join(self.data_dir, '..', 'predictions', 'player_projections_2025.csv')
+        player_projections = None
+        if os.path.exists(projection_file):
+            player_projections = pd.read_csv(projection_file)
+            print(f"Loaded player projections from {projection_file}")
+        else:
+            print("No player projections file found.")
+        
+        # Load Statcast data
+        statcast_dir = os.path.join(self.data_dir, '..', 'processed', 'statcast')
+        
+        batter_statcast = None
+        pitcher_statcast = None
+        
+        batter_file = os.path.join(statcast_dir, 'processed_batter_all_time.csv')
+        if os.path.exists(batter_file):
+            batter_statcast = pd.read_csv(batter_file)
+            print(f"Loaded batter Statcast data from {batter_file}")
+        
+        pitcher_file = os.path.join(statcast_dir, 'processed_pitcher_all_time.csv')
+        if os.path.exists(pitcher_file):
+            pitcher_statcast = pd.read_csv(pitcher_file)
+            print(f"Loaded pitcher Statcast data from {pitcher_file}")
+        
+        return player_projections, batter_statcast, pitcher_statcast
+
+    def predict_player_props(self, games_df=None, player_projections=None, batter_statcast=None, pitcher_statcast=None, prop_type=None):
+        """
+        Predict player props for upcoming games
+        
+        Args:
+            games_df (DataFrame, optional): Game data
+            player_projections (DataFrame, optional): Player projections
+            batter_statcast (DataFrame, optional): Batter Statcast data
+            pitcher_statcast (DataFrame, optional): Pitcher Statcast data
+            prop_type (str, optional): Type of prop ('hits', 'hr', 'strikeouts')
+            
+        Returns:
+            DataFrame: Player prop predictions
+        """
+        from scipy import stats
+        import numpy as np
+        import os
+        import pandas as pd
+        
+        print("Predicting player props...")
+        
+        # Load player name mapping if available
+        player_map = {}
+        mapping_file = os.path.join(self.data_dir, '..', 'predictions', 'improved_player_id_map.csv')
+        if os.path.exists(mapping_file):
+            mapping_df = pd.read_csv(mapping_file)
+            player_map = dict(zip(mapping_df['player_id'].astype(str), mapping_df['player_name']))
+        
+        # If no games provided, create sample games
+        if games_df is None:
+            games_df = pd.DataFrame({
+                'game_id': [1001, 1002, 1003],
+                'game_date': ['2025-04-01', '2025-04-01', '2025-04-02'],
+                'home_team': ['NYY', 'LAD', 'BOS'],
+                'away_team': ['BOS', 'SF', 'NYY'],
+                'home_team_id': [147, 119, 111],
+                'away_team_id': [111, 137, 147]
+            })
+        
+        # If no player projections, attempt to load from file or create sample
+        if player_projections is None:
+            projection_file = os.path.join(self.data_dir, '..', 'predictions', 'player_projections_2025.csv')
+            if os.path.exists(projection_file):
+                player_projections = pd.read_csv(projection_file)
+                print(f"Loaded player projections from {projection_file}")
+            else:
+                print("No player projections file found. Creating sample data.")
+                player_projections = pd.DataFrame({
+                    'player_id': range(10001, 10021),
+                    'player_name': [f"Player {i}" for i in range(1, 21)],
+                    'hit_rate': np.random.uniform(0.3, 0.6, 20),
+                    'hr_rate': np.random.uniform(0.01, 0.1, 20),
+                    'projected_hit_rate_2025': np.random.uniform(0.3, 0.6, 20),
+                    'projected_hr_rate_2025': np.random.uniform(0.01, 0.1, 20)
+                })
+        
+        # If no Statcast data provided, try to load or use None
+        if batter_statcast is None:
+            statcast_dir = os.path.join(self.data_dir, '..', 'processed', 'statcast')
+            batter_file = os.path.join(statcast_dir, 'processed_batter_all_time.csv')
+            if os.path.exists(batter_file):
+                batter_statcast = pd.read_csv(batter_file)
+                print(f"Loaded batter Statcast data from {batter_file}")
+        if pitcher_statcast is None:
+            statcast_dir = os.path.join(self.data_dir, '..', 'processed', 'statcast')
+            pitcher_file = os.path.join(statcast_dir, 'processed_pitcher_all_time.csv')
+            if os.path.exists(pitcher_file):
+                pitcher_statcast = pd.read_csv(pitcher_file)
+                print(f"Loaded pitcher Statcast data from {pitcher_file}")
+        
+        prop_predictions = []
+        if prop_type:
+            print(f"Generating {prop_type} prop predictions")
+        else:
+            print("Generating all available prop predictions")
+        prop_mappings = {
+            'hits': 'projected_hit_rate_2025',
+            'hr': 'projected_hr_rate_2025',
+            'strikeouts': 'projected_strikeout_rate_2025'
+        }
+        for _, game in games_df.iterrows():
+            game_id = game['game_id']
+            home_team = game['home_team']
+            away_team = game['away_team']
+            ballpark_run_factor = game.get('ballpark_run_factor', 0)
+            ballpark_hr_factor = game.get('ballpark_hr_factor', 0)
+            weather_score = game.get('weather_score', 0)
+            home_pitcher_id = game.get('home_starting_pitcher_id') or game.get('home_pitcher_id')
+            away_pitcher_id = game.get('away_starting_pitcher_id') or game.get('away_pitcher_id')
+            # Dedicated pitcher strikeouts prediction
+            if prop_type == 'strikeouts' or prop_type is None:
+                strikeout_props = self.predict_pitcher_strikeouts(
+                    game_id, home_team, away_team, home_pitcher_id, away_pitcher_id, pitcher_statcast
+                )
+                if strikeout_props:
+                    prop_predictions.extend(strikeout_props)
+                if prop_type == 'strikeouts':
+                    continue
+            num_players = len(player_projections)
+            home_indices = np.random.choice(num_players, 9, replace=False)
+            away_indices = np.random.choice(num_players, 9, replace=False)
+            for idx in home_indices:
+                player = player_projections.iloc[idx]
+                player_id = player['player_id']
+                player_name = player_map.get(str(player_id), f"Player {player_id}")
+                for prop in ['hits', 'hr']:
+                    if prop_type and prop != prop_type:
+                        continue
+                    projection_field = prop_mappings.get(prop)
+                    if projection_field and projection_field in player:
+                        base_rate = player[projection_field]
+                    else:
+                        base_rate = player.get('hit_rate', 0.3) if prop == 'hits' else player.get('hr_rate', 0.05)
+                    adjusted_rate = base_rate if not np.isnan(base_rate) else 0.25
+                    if prop == 'hits':
+                        ballpark_factor = ballpark_run_factor if not np.isnan(ballpark_run_factor) else 0
+                        adjusted_rate *= (1 + ballpark_factor * 0.2)
+                    elif prop == 'hr':
+                        ballpark_factor = ballpark_hr_factor if not np.isnan(ballpark_hr_factor) else 0
+                        adjusted_rate *= (1 + ballpark_factor * 0.3)
+                    weather_factor = weather_score if not np.isnan(weather_score) else 0
+                    adjusted_rate *= (1 + weather_factor * 0.1)
+                    adjusted_rate = max(0.01, adjusted_rate) if not np.isnan(adjusted_rate) else 0.25
+                    at_bats = 4
+                    expected_value = round(adjusted_rate * at_bats, 2)
+                    if np.isnan(expected_value):
+                        expected_value = 0.5
+                    if prop == 'hits':
+                        line = round(expected_value * 0.8 + 0.5)
+                    else:
+                        line = 0.5 if expected_value > 0.3 else 0.0
+                    prop_predictions.append({
+                        'game_id': game_id,
+                        'team': home_team,
+                        'player_id': player_id,
+                        'player_name': player_name,
+                        'is_home': True,
+                        'prop_type': prop,
+                        'base_rate': base_rate,
+                        'adjusted_rate': adjusted_rate,
+                        'expected_value': expected_value,
+                        'line': line,
+                        'over_prob': 1 - stats.poisson.cdf(line, expected_value)
+                    })
+            for idx in away_indices:
+                player = player_projections.iloc[idx]
+                player_id = player['player_id']
+                player_name = player_map.get(str(player_id), f"Player {player_id}")
+                for prop in ['hits', 'hr']:
+                    if prop_type and prop != prop_type:
+                        continue
+                    projection_field = prop_mappings.get(prop)
+                    if projection_field and projection_field in player:
+                        base_rate = player[projection_field]
+                    else:
+                        base_rate = player.get('hit_rate', 0.3) if prop == 'hits' else player.get('hr_rate', 0.05)
+                    adjusted_rate = base_rate if not np.isnan(base_rate) else 0.25
+                    if prop == 'hits':
+                        ballpark_factor = ballpark_run_factor if not np.isnan(ballpark_run_factor) else 0
+                        adjusted_rate *= (1 + ballpark_factor * 0.15)
+                    elif prop == 'hr':
+                        ballpark_factor = ballpark_hr_factor if not np.isnan(ballpark_hr_factor) else 0
+                        adjusted_rate *= (1 + ballpark_factor * 0.25)
+                    weather_factor = weather_score if not np.isnan(weather_score) else 0
+                    adjusted_rate *= (1 + weather_factor * 0.1)
+                    adjusted_rate = max(0.01, adjusted_rate) if not np.isnan(adjusted_rate) else 0.25
+                    at_bats = 4
+                    expected_value = round(adjusted_rate * at_bats, 2)
+                    if np.isnan(expected_value):
+                        expected_value = 0.5
+                    if prop == 'hits':
+                        line = round(expected_value * 0.8 + 0.5)
+                    else:
+                        line = 0.5 if expected_value > 0.3 else 0.0
+                    prop_predictions.append({
+                        'game_id': game_id,
+                        'team': away_team,
+                        'player_id': player_id,
+                        'player_name': player_name,
+                        'is_home': False,
+                        'prop_type': prop,
+                        'base_rate': base_rate,
+                        'adjusted_rate': adjusted_rate,
+                        'expected_value': expected_value,
+                        'line': line,
+                        'over_prob': 1 - stats.poisson.cdf(line, expected_value)
+                    })
+        props_df = pd.DataFrame(prop_predictions)
+        if 'over_prob' in props_df.columns:
+            props_df['edge'] = (props_df['over_prob'] - 0.5) * 2
+        if len(props_df) > 0:
+            prediction_dir = os.path.join(self.data_dir, '..', 'predictions')
+            os.makedirs(prediction_dir, exist_ok=True)
+            output_file = os.path.join(
+                prediction_dir, 
+                f"player_props_{prop_type}_predictions.csv" if prop_type else "player_props_predictions.csv"
+            )
+            props_df.to_csv(output_file, index=False)
+            print(f"Saved player props predictions to {output_file}")
+        return props_df
+
+    def predict_pitcher_strikeouts(self, game_id, home_team, away_team, home_pitcher_id, away_pitcher_id, pitcher_statcast=None):
+        """
+        Predict strikeout props for pitchers
+        
+        Args:
+            game_id: Game ID
+            home_team: Home team code
+            away_team: Away team code
+            home_pitcher_id: Home starting pitcher ID
+            away_pitcher_id: Away starting pitcher ID
+            pitcher_statcast: Pitcher Statcast data (optional)
+            
+        Returns:
+            list: Strikeout prop predictions
+        """
+        from scipy.stats import norm
+        import numpy as np
+        import os
+        import pandas as pd
+        # Get pitcher names if available
+        player_map = {}
+        mapping_file = os.path.join(self.data_dir, '..', 'predictions', 'improved_player_id_map.csv')
+        if os.path.exists(mapping_file):
+            mapping_df = pd.read_csv(mapping_file)
+            player_map = dict(zip(mapping_df['player_id'].astype(str), mapping_df['player_name']))
+        home_pitcher_name = player_map.get(str(home_pitcher_id), "Home Pitcher")
+        away_pitcher_name = player_map.get(str(away_pitcher_id), "Away Pitcher")
+        home_k_rate = None
+        away_k_rate = None
+        if pitcher_statcast is not None:
+            if home_pitcher_id:
+                home_pitcher = pitcher_statcast[pitcher_statcast['player_id'] == str(home_pitcher_id)]
+                if not home_pitcher.empty:
+                    if 'whiff_rate' in home_pitcher.columns:
+                        home_k_rate = home_pitcher['whiff_rate'].iloc[0] * 25
+            if away_pitcher_id:
+                away_pitcher = pitcher_statcast[pitcher_statcast['player_id'] == str(away_pitcher_id)]
+                if not away_pitcher.empty:
+                    if 'whiff_rate' in away_pitcher.columns:
+                        away_k_rate = away_pitcher['whiff_rate'].iloc[0] * 25
+        if home_k_rate is None or np.isnan(home_k_rate):
+            home_k_rate = 6.0
+        if away_k_rate is None or np.isnan(away_k_rate):
+            away_k_rate = 6.0
+        predictions = []
+        home_expected = round(home_k_rate, 1)
+        home_line = round(home_expected)
+        home_over_prob = 1 - norm.cdf(home_line, home_expected, 2.0)
+        predictions.append({
+            'game_id': game_id,
+            'team': home_team,
+            'player_id': str(home_pitcher_id) if home_pitcher_id else 'unknown',
+            'player_name': home_pitcher_name,
+            'is_home': True,
+            'prop_type': 'strikeouts',
+            'expected_value': home_expected,
+            'line': home_line,
+            'over_prob': home_over_prob,
+            'edge': (home_over_prob - 0.5) * 2
+        })
+        away_expected = round(away_k_rate, 1)
+        away_line = round(away_expected)
+        away_over_prob = 1 - norm.cdf(away_line, away_expected, 2.0)
+        predictions.append({
+            'game_id': game_id,
+            'team': away_team,
+            'player_id': str(away_pitcher_id) if away_pitcher_id else 'unknown',
+            'player_name': away_pitcher_name,
+            'is_home': False,
+            'prop_type': 'strikeouts',
+            'expected_value': away_expected,
+            'line': away_line,
+            'over_prob': away_over_prob,
+            'edge': (away_over_prob - 0.5) * 2
+        })
+        return predictions

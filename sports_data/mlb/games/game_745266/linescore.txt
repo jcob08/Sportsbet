@@ -1,0 +1,3 @@
+Final    1 2 3 4 5 6 7 8 9  R   H   E  
+D-backs  0 0 0 0 0 0 0 1 0  1   3   0  
+Mariners 0 0 0 0 1 0 2 0 0  3   4   0  

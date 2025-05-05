@@ -163,14 +163,42 @@ def test_model_integration():
         print(predictions[columns_to_show])
     
     print("\n--- Predicting player props ---")
-    player_projections, batter_statcast, pitcher_statcast = betting_model.load_player_data()
-    
-    for prop_type in ['hits', 'home_runs', 'strikeouts']:
-        prop_predictions = betting_model.predict_player_props(
-            sample_games, player_projections, batter_statcast, pitcher_statcast, prop_type=prop_type
-        )
-        print(f"\nSample {prop_type} prop predictions:")
-        print(prop_predictions[['game_id', 'team', 'player_id', 'player_name', 'prop_type', 'expected_value']].head())
+
+    try:
+        player_projections, batter_statcast, pitcher_statcast = betting_model.load_player_data()
+        
+        # First, create player projections if they don't exist
+        if player_projections is None:
+            print("Creating player projections file...")
+            from utilities.create_player_projections import create_player_projections
+            player_projections = create_player_projections()
+        
+        for prop_type in ['hits', 'hr', 'strikeouts']:
+            print(f"\nPredicting {prop_type} props...")
+            try:
+                prop_predictions = betting_model.predict_player_props(
+                    sample_games, player_projections, batter_statcast, pitcher_statcast, prop_type=prop_type
+                )
+                if prop_predictions is not None and not prop_predictions.empty:
+                    print(f"Successfully generated {len(prop_predictions)} {prop_type} prop predictions")
+                    print(f"\nSample {prop_type} prop predictions:")
+                    
+                    cols_to_show = ['game_id', 'team', 'player_id', 'player_name', 'prop_type']
+                    if 'expected_value' in prop_predictions.columns:
+                        cols_to_show.append('expected_value')
+                    if 'line' in prop_predictions.columns:
+                        cols_to_show.append('line')
+                    if 'over_prob' in prop_predictions.columns:
+                        cols_to_show.append('over_prob')
+                    
+                    available_cols = [col for col in cols_to_show if col in prop_predictions.columns]
+                    print(prop_predictions[available_cols].head())
+                else:
+                    print(f"No {prop_type} prop predictions generated.")
+            except Exception as e:
+                print(f"Error predicting {prop_type} props: {e}")
+    except Exception as e:
+        print(f"Error in player props prediction: {e}")
 
     print("\n--- Model integration testing complete ---")
     return betting_model

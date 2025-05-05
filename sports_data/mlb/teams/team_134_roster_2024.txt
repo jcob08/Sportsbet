@@ -1,0 +1,56 @@
+#3   CF  Ji Hwan Bae
+#14  C   Joey Bart
+#51  P   David Bednar
+#68  P   Jalen Beeks
+#43  P   Ryan Borucki
+#56  P   Justin Bruihl
+#53  P   Mike Burrows
+#45  P   Aroldis Chapman
+#59  P   Roansy Contreras
+#25  1B  Billy Cook
+#15  OF  Oneil Cruz
+#32  C   Henry Davis
+#41  LF  Bryan De La Cruz
+#55  C   Jason Delay
+#6   P   Bailey Falter
+#52  P   Brady Feigl
+#28  P   Josh Fleming
+#0   P   Domingo Germán
+#27  P   Marco Gonzales
+#39  2B  Nick Gonzales
+#6   C   Yasmani Grandal
+#13  3B  Ke'Bryan Hayes
+#61  P   Ben Heller
+#61  P   Jose E. Hernandez
+#35  P   Colin Holderman
+#34  P   Brent Honeywell
+#59  P   Daulton Jefferies
+#2   1B  Connor Joe
+#37  P   Jared Jones
+#23  P   Mitch Keller
+#7   2B  Isiah Kiner-Falefa
+#56  C   Grant Koch
+#64  P   Isaac Mattson
+#22  RF  Andrew McCutchen
+#29  LF  Billy McKinney
+#50  P   Carmen Mlodzinski
+#66  P   Kyle Nicolas
+#38  RF  Edward Olivares
+#48  P   Luis L. Ortiz
+#77  RF  Joshua Palacios
+#31  SS  Liover Peguero
+#54  P   Martín Pérez
+#46  P   Quinn Priester
+#10  LF  Bryan Reynolds
+#72  P   Ryder Ryan
+#60  P   Dennis Santana
+#30  P   Paul Skenes
+#63  P   Hunter Stratton
+#65  CF  Jack Suwinski
+#18  CF  Michael A. Taylor
+#44  1B  Rowdy Tellez
+#19  3B  Jared Triolo
+#34  P   Joey Wentz
+#25  2B  Alika Williams
+#46  P   Jake Woodford
+#38  2B  Nick Yorke

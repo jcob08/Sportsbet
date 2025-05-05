@@ -1,0 +1,71 @@
+# Contextual Features Documentation
+
+Generated on 2025-05-04 17:57:06
+
+Total features added: 21
+
+## Feature Descriptions
+
+### ballpark_run_factor
+Normalized ballpark effect on run scoring, where positive values indicate more runs (e.g., 0.1 means 10% above average).
+
+### ballpark_hr_factor
+Normalized ballpark effect on home runs, where positive values indicate more home runs (e.g., 0.15 means 15% above average).
+
+### ballpark_hitter_friendly_score
+Overall score of how favorable the ballpark is for hitters, based on multiple factors.
+
+### ballpark_elevation
+Elevation of the ballpark in feet, which affects ball flight distance.
+
+### ballpark_environment_type
+Type of ballpark environment: 'dome', 'retractable', or 'outdoor'.
+
+### temp_factor
+Effect of temperature on offense (-0.15 to 0.15 scale), where positive means higher scoring.
+
+### wind_factor
+Effect of wind on offense (positive for outward wind, negative for inward wind).
+
+### humidity_factor
+Effect of humidity on offense (slight negative effect as humidity increases).
+
+### precipitation_factor
+Effect of precipitation on offense (negative, more severe for heavier rain).
+
+### weather_score
+Combined score of all weather factors and their impact on offense.
+
+### umpire_strikeout_boost
+Expected increase or decrease in strikeouts due to umpire tendencies.
+
+### umpire_runs_boost
+Expected increase or decrease in runs due to umpire tendencies.
+
+### umpire_consistency_factor
+How consistent the umpire's strike zone is relative to average.
+
+### home_power_context_advantage
+How much the contextual factors boost the home team's power hitting (-1 to 1 scale).
+
+### away_power_context_advantage
+How much the contextual factors boost the away team's power hitting (-1 to 1 scale).
+
+### home_contact_context_advantage
+How much the contextual factors boost the home team's contact hitting (-1 to 1 scale).
+
+### away_contact_context_advantage
+How much the contextual factors boost the away team's contact hitting (-1 to 1 scale).
+
+### total_runs_context_factor
+Combined impact of all contextual factors on expected total runs (-1 to 1 scale).
+
+### total_strikeouts_context_factor
+Combined impact of all contextual factors on expected strikeouts (-1 to 1 scale).
+
+### home_advantage_score
+Overall contextual advantage score for the home team (-1 to 1 scale).
+
+### away_advantage_score
+Overall contextual advantage score for the away team (-1 to 1 scale).
+

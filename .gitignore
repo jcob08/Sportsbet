@@ -1,0 +1,6 @@
+# Ignore data and secrets 
+*.csv 
+*.json 
+__pycache__/ 
+.env 
+.DS_Store 
